@@ -2,10 +2,16 @@
 precompute.py — Run once to generate and cache candidate embeddings.
 
 Usage:
-    python precompute.py --candidates ./candidates.jsonl --out ./cache/embeddings.npz
+    python precompute.py \
+        --candidates candidates.jsonl \
+        --out cache/embeddings.npz \
+        --batch-size 4096
 
-Runtime: ~3-4 min on CPU for 100K candidates (MiniLM-L6-v2, batch 512).
-Output:  cache/embeddings.npz  (ids array + embeddings matrix)
+Requirements:
+    pip install sentence-transformers torch
+
+GPU:
+    Automatically uses CUDA if available.
 """
 
 import argparse
@@ -13,9 +19,9 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 
 import numpy as np
+
 
 def build_candidate_text(c: dict) -> str:
     """Build a single rich text representation of the candidate for embedding."""
@@ -27,28 +33,41 @@ def build_candidate_text(c: dict) -> str:
     parts.append(p.get("summary", ""))
 
     # Current role context
-    parts.append(f"Current title: {p.get('current_title', '')}. "
-                 f"Industry: {p.get('current_industry', '')}. "
-                 f"Company size: {p.get('current_company_size', '')}.")
+    parts.append(
+        f"Current title: {p.get('current_title', '')}. "
+        f"Industry: {p.get('current_industry', '')}. "
+        f"Company size: {p.get('current_company_size', '')}."
+    )
 
     # Career descriptions (most recent 3)
     for role in c.get("career_history", [])[:3]:
         title = role.get("title", "")
         company = role.get("company", "")
-        desc = role.get("description", "")[:400]  # truncate long descriptions
+        desc = role.get("description", "")[:400]
         industry = role.get("industry", "")
-        parts.append(f"{title} at {company} ({industry}): {desc}")
+        parts.append(
+            f"{title} at {company} ({industry}): {desc}"
+        )
 
-    # Skills with proficiency (focus on advanced/expert)
+    # Skills
     skill_strs = []
     for s in c.get("skills", []):
-        if s.get("proficiency") in ("expert", "advanced", "intermediate"):
+        if s.get("proficiency") in (
+            "expert",
+            "advanced",
+            "intermediate",
+        ):
             skill_strs.append(s["name"])
+
     if skill_strs:
         parts.append("Skills: " + ", ".join(skill_strs[:20]))
 
     # Certifications
-    certs = [cert["name"] for cert in c.get("certifications", [])]
+    certs = [
+        cert["name"]
+        for cert in c.get("certifications", [])
+    ]
+
     if certs:
         parts.append("Certifications: " + ", ".join(certs))
 
@@ -56,32 +75,98 @@ def build_candidate_text(c: dict) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Precompute candidate embeddings")
-    parser.add_argument("--candidates", default="candidates.jsonl",
-                        help="Path to candidates.jsonl")
-    parser.add_argument("--out", default="cache/embeddings.npz",
-                        help="Output .npz file path")
-    parser.add_argument("--model", default="sentence-transformers/all-MiniLM-L6-v2",
-                        help="Sentence-transformers model name")
-    parser.add_argument("--batch-size", type=int, default=512)
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Limit candidates (for testing)")
+    parser = argparse.ArgumentParser(
+        description="Precompute candidate embeddings"
+    )
+
+    parser.add_argument(
+        "--candidates",
+        default="candidates.jsonl",
+        help="Path to candidates.jsonl",
+    )
+
+    parser.add_argument(
+        "--out",
+        default="cache/embeddings.npz",
+        help="Output .npz file path",
+    )
+
+    parser.add_argument(
+        "--model",
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        help="Sentence-transformers model name",
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=4096,
+        help="Encoding batch size",
+    )
+
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit candidates (for testing)",
+    )
+
     args = parser.parse_args()
 
-    # Lazy import so rank.py doesn't need to import ST if cache exists
     try:
+        import torch
         from sentence_transformers import SentenceTransformer
     except ImportError:
-        print("ERROR: sentence-transformers not installed.")
-        print("Run: pip install sentence-transformers")
+        print(
+            "ERROR: Missing dependencies.\n"
+            "Run:\n"
+            "pip install torch sentence-transformers"
+        )
         sys.exit(1)
 
-    os.makedirs(os.path.dirname(args.out) if os.path.dirname(args.out) else ".", exist_ok=True)
+    # Auto-detect device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    print("=" * 60)
+    print(f"Using device: {device}")
+
+    if device == "cuda":
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(
+            f"GPU Memory: "
+            f"{torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB"
+        )
+
+    print("=" * 60)
+
+    out_dir = os.path.dirname(args.out)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     print(f"Loading model: {args.model}")
-    model = SentenceTransformer(args.model)
+
+    t_model = time.time()
+
+    model = SentenceTransformer(
+        args.model,
+        device=device,
+    )
+
+    # FP16 inference on GPU for higher throughput
+    if device == "cuda":
+        try:
+            model.half()
+            print("FP16 enabled")
+        except Exception:
+            print("FP16 unavailable, using FP32")
+
+    print(
+        f"Model loaded in "
+        f"{time.time() - t_model:.1f}s"
+    )
 
     print(f"Reading candidates from: {args.candidates}")
+
     t0 = time.time()
 
     ids = []
@@ -89,15 +174,24 @@ def main():
 
     with open(args.candidates, "r", encoding="utf-8") as f:
         for i, line in enumerate(f):
-            if args.limit and i >= args.limit:
+            if args.limit is not None and i >= args.limit:
                 break
+
             c = json.loads(line)
+
             ids.append(c["candidate_id"])
             texts.append(build_candidate_text(c))
 
-    print(f"Loaded {len(ids)} candidates in {time.time()-t0:.1f}s")
+    print(
+        f"Loaded {len(ids):,} candidates "
+        f"in {time.time() - t0:.1f}s"
+    )
 
-    print(f"Computing embeddings (batch_size={args.batch_size})...")
+    print(
+        f"Computing embeddings "
+        f"(batch_size={args.batch_size})..."
+    )
+
     t1 = time.time()
 
     embeddings = model.encode(
@@ -105,21 +199,42 @@ def main():
         batch_size=args.batch_size,
         show_progress_bar=True,
         convert_to_numpy=True,
-        normalize_embeddings=True,   # unit-norm → cosine = dot product
+        normalize_embeddings=True,
     )
 
     elapsed = time.time() - t1
-    print(f"Encoded {len(ids)} candidates in {elapsed:.1f}s  ({len(ids)/elapsed:.0f} cands/sec)")
 
-    # Save
+    print(
+        f"Encoded {len(ids):,} candidates in "
+        f"{elapsed:.1f}s "
+        f"({len(ids)/elapsed:,.0f} candidates/sec)"
+    )
+
+    embeddings = embeddings.astype(np.float32)
+
+    print("Saving embeddings...")
+
     np.savez_compressed(
         args.out,
         ids=np.array(ids),
-        embeddings=embeddings.astype(np.float32),
+        embeddings=embeddings,
     )
-    size_mb = os.path.getsize(args.out + ".npz" if not args.out.endswith(".npz") else args.out) / 1e6
-    print(f"Saved → {args.out}  ({size_mb:.1f} MB)")
-    print(f"Total precompute time: {time.time()-t0:.1f}s")
+
+    file_size_mb = os.path.getsize(args.out) / 1e6
+
+    print(f"Saved -> {args.out}")
+    print(f"File size: {file_size_mb:.1f} MB")
+
+    if device == "cuda":
+        print(
+            f"Peak GPU memory: "
+            f"{torch.cuda.max_memory_allocated() / 1024**3:.2f} GB"
+        )
+
+    print(
+        f"Total runtime: "
+        f"{time.time() - t0:.1f}s"
+    )
 
 
 if __name__ == "__main__":

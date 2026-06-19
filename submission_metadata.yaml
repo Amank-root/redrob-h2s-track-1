@@ -1,15 +1,33 @@
-# submission_metadata.yaml
-# Fill in your team details before submitting
+team_name: "UnInvited"
 
-team_id: "YOUR_TEAM_ID"
-team_name: "YOUR_TEAM_NAME"
+primary_contact:
+  name: "Aman Kushwaha"
+  email: "899aman.kushwaha@gmail.com"
+  phone: "+91-9555327236"        
+
 members:
-  - name: "Member 1"
-    email: "member1@example.com"
-  - name: "Member 2"
-    email: "member2@example.com"
+  - name: "Aman Kushwaha"
+    email: "899aman.kushwaha@gmail.com"
+    role: "Team Lead"
 
-approach_summary: >
+github_repo: "https://github.com/Amank-root/redrob-h2s-track-1"
+
+sandbox_link: "https://redrob-h2s-track-1.streamlit.app"
+
+reproduce_command: "python rank.py --candidates candidates.jsonl --out submission.csv"
+
+compute:
+  platform: "Colab"                    
+  cpu_cores: 8                                  
+  ram_gb: 16                                    
+  python_version: "3.12.13"                      
+  os: "Ubuntu 22.04.5"                              
+  uses_gpu_for_inference: false                 
+  has_network_during_ranking: false             
+  pre_computation_required: false              
+  pre_computation_time_minutes: 0  
+
+methodology_summary: >
   5-layer scoring pipeline: (1) Hard disqualification of consulting-only careers,
   honeypots, and wrong-domain candidates; (2) Core fit scoring using skill depth
   (proficiency × duration × endorsements × assessment verification), experience band,
@@ -30,7 +48,14 @@ key_innovations:
   - "Semantic embeddings used as a 10% sub-signal, not primary signal, to avoid JD-text gaming"
   - "Assessment score verification adds trust to self-reported skill proficiencies"
 
+declarations:
+  read_submission_spec: true        
+  code_is_original_work: true       
+  no_collusion: true                
+  honeypot_check_done: true        
+  reproduction_tested: true         
+
 runtime_seconds: "<120 on CPU (rule-based only), <300 with embeddings"
-hardware: "CPU only, no GPU required"
+hardware: "CPU only, no GPU required for ranking. GPU required for pre-computation"
 external_apis: "None"
 model_used: "sentence-transformers/all-MiniLM-L6-v2 (optional, local)"

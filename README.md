@@ -32,6 +32,7 @@ Eligible: ~90,000
 ## File Structure
 
 ```
+├── cache/                    # Optional: cache for pre-computed embeddings
 ├── rank.py                   # Main ranking script (run this)
 ├── precompute.py             # Optional: pre-compute embeddings for +accuracy
 ├── scoring.py                # All scoring functions (modular, testable)
@@ -175,7 +176,8 @@ assessment_bonus: assessment_score/100 × 0.15 (if available)
 ## Optional: Semantic Embeddings for Higher Accuracy
 
 ```bash
-# Step 1: Pre-compute embeddings once (~3 min on CPU for 100K)
+# Step 1: Pre-compute embeddings once (~3 min on GPU for 100K)
+# CPU on batch_size=512 takes about 3-5 hours, hence shifted to GPU (T4)
 python precompute.py --candidates candidates.jsonl --out cache/embeddings.npz
 
 # Step 2: Run ranker with embeddings
@@ -241,11 +243,11 @@ non-empty reasoning · honeypot audit · reasoning uniqueness
 | Mode | Time (CPU) | Hardware |
 |------|-----------|---------|
 | Rule-based only (full 100K) | ~22 seconds | CPU, no GPU |
-| With embedding precompute | ~5 min total | CPU, no GPU |
-| Precompute (once) | ~3 min | CPU |
+| With embedding precompute | ~5 min total | CPU, GPU |
+| Precompute (once) | 3-5 hours (CPU), ~3 min (GPU T4) | CPU, GPU |
 | Rank with cached embeddings | ~30 seconds | CPU |
 
-No external API calls. No GPU required. Runs fully offline.
+No external API calls. GPU required for precompute otherwise fully offline.
 
 ---
 
