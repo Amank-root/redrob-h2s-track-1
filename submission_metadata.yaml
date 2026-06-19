@@ -1,0 +1,36 @@
+# submission_metadata.yaml
+# Fill in your team details before submitting
+
+team_id: "YOUR_TEAM_ID"
+team_name: "YOUR_TEAM_NAME"
+members:
+  - name: "Member 1"
+    email: "member1@example.com"
+  - name: "Member 2"
+    email: "member2@example.com"
+
+approach_summary: >
+  5-layer scoring pipeline: (1) Hard disqualification of consulting-only careers,
+  honeypots, and wrong-domain candidates; (2) Core fit scoring using skill depth
+  (proficiency × duration × endorsements × assessment verification), experience band,
+  location, and title-gated anti-keyword-stuffing gate; (3) Career quality scoring
+  measuring product company tenure ratio, company size fit for Series A stage,
+  GitHub activity, and shipping signal evidence in career descriptions; (4) Behavioral
+  availability multiplier combining last-active recency, open-to-work flag, recruiter
+  response rate, response time, notice period, and interview completion rate;
+  (5) Composite weighted scoring (40% core fit, 35% career quality, 25% behavioral)
+  with semantic embedding similarity (sentence-transformers/all-MiniLM-L6-v2) as a
+  sub-signal within core fit.
+
+key_innovations:
+  - "Title-gated scoring prevents keyword-stuffed non-technical profiles from ranking high"
+  - "Behavioral multiplier demotes zombie candidates who never respond to recruiters"
+  - "Honeypot detection catches impossible career profiles (expert skills with 0 months, YoE inflation)"
+  - "Product company ratio penalizes consulting-only backgrounds as required by JD"
+  - "Semantic embeddings used as a 10% sub-signal, not primary signal, to avoid JD-text gaming"
+  - "Assessment score verification adds trust to self-reported skill proficiencies"
+
+runtime_seconds: "<120 on CPU (rule-based only), <300 with embeddings"
+hardware: "CPU only, no GPU required"
+external_apis: "None"
+model_used: "sentence-transformers/all-MiniLM-L6-v2 (optional, local)"
